@@ -6,6 +6,8 @@ export interface FileEvent {
   file_ext: string;
   file_size_bytes: number | null;
   diff_summary: string | null;
+  workspace?: string | null;
+  scan_cycle_id?: number | null;
 }
 
 export interface Stats {
@@ -27,29 +29,80 @@ export interface HeatmapData {
   count: number;
 }
 
+export interface ScanCycle {
+  id?: number;
+  timestamp: string;
+  event_count: number;
+  summary: string;
+  files_created: number;
+  files_modified: number;
+  files_deleted: number;
+  workspace: string;
+}
+
+export interface Workspace {
+  name: string;
+  path: string;
+  enabled: boolean;
+}
+
 const API_BASE = '/api';
 
 export const api = {
-  async getEvents(limit = 100, offset = 0, type?: string) {
+  async getEvents(limit = 100, offset = 0, type?: string, workspace?: string) {
     const params = new URLSearchParams({ limit: limit.toString(), offset: offset.toString() });
     if (type) params.append('type', type);
+    if (workspace) params.append('workspace', workspace);
 
     const response = await fetch(`${API_BASE}/events?${params}`);
     return response.json();
   },
 
-  async getStats(): Promise<Stats> {
-    const response = await fetch(`${API_BASE}/stats`);
+  async getStats(workspace?: string): Promise<Stats> {
+    const params = workspace ? `?workspace=${workspace}` : '';
+    const response = await fetch(`${API_BASE}/stats${params}`);
     return response.json();
   },
 
-  async getTimeline(hours = 24): Promise<TimelineData[]> {
-    const response = await fetch(`${API_BASE}/timeline?hours=${hours}`);
+  async getTimeline(hours = 24, workspace?: string): Promise<TimelineData[]> {
+    const params = new URLSearchParams({ hours: hours.toString() });
+    if (workspace) params.append('workspace', workspace);
+    const response = await fetch(`${API_BASE}/timeline?${params}`);
     return response.json();
   },
 
-  async getHeatmap(limit = 50): Promise<HeatmapData[]> {
-    const response = await fetch(`${API_BASE}/heatmap?limit=${limit}`);
+  async getHeatmap(limit = 50, workspace?: string): Promise<HeatmapData[]> {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    if (workspace) params.append('workspace', workspace);
+    const response = await fetch(`${API_BASE}/heatmap?${params}`);
     return response.json();
+  },
+
+  async getCycles(limit = 20, workspace?: string): Promise<{ cycles: ScanCycle[]; limit: number }> {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    if (workspace) params.append('workspace', workspace);
+    const response = await fetch(`${API_BASE}/cycles?${params}`);
+    return response.json();
+  },
+
+  async getWorkspaces(): Promise<{ workspaces: Workspace[] }> {
+    const response = await fetch(`${API_BASE}/workspaces`);
+    return response.json();
+  },
+
+  async addWorkspace(name: string, path: string): Promise<void> {
+    const response = await fetch(`${API_BASE}/workspaces`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, path }),
+    });
+    if (!response.ok) throw new Error('Failed to add workspace');
+  },
+
+  async removeWorkspace(name: string): Promise<void> {
+    const response = await fetch(`${API_BASE}/workspaces/${name}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to remove workspace');
   },
 };

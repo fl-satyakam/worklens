@@ -38,13 +38,15 @@ export class FileWatcher extends EventEmitter {
   private db: WorkLensDB;
   private config: WorkLensConfig;
   private projectRoot: string;
+  private workspaceName: string;
   private fileCache = new Map<string, string>();
 
-  constructor(db: WorkLensDB, config: WorkLensConfig, projectRoot: string) {
+  constructor(db: WorkLensDB, config: WorkLensConfig, projectRoot: string, workspaceName: string = 'default') {
     super();
     this.db = db;
     this.config = config;
     this.projectRoot = projectRoot;
+    this.workspaceName = workspaceName;
   }
 
   private shouldIgnore(rel: string): boolean {
@@ -178,6 +180,7 @@ export class FileWatcher extends EventEmitter {
       file_ext: ext,
       file_size_bytes: fileSize,
       diff_summary: diffSummary,
+      workspace: this.workspaceName,
     };
 
     this.db.insertEvent(event);

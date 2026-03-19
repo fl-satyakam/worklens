@@ -1,7 +1,7 @@
 import express, { Express } from 'express';
 import * as path from 'path';
+import { EventEmitter } from 'events';
 import { WorkLensDB } from '../core/db';
-import { FileWatcher } from '../core/watcher';
 import { SSEManager } from './sse';
 import { createAPIRouter } from './api';
 
@@ -10,12 +10,12 @@ export class WorkLensServer {
   private server: any;
   private sseManager: SSEManager;
   private db: WorkLensDB;
-  private watcher: FileWatcher;
+  private eventEmitter: EventEmitter;
   private port: number;
 
-  constructor(db: WorkLensDB, watcher: FileWatcher, port: number) {
+  constructor(db: WorkLensDB, eventEmitter: EventEmitter, port: number) {
     this.db = db;
-    this.watcher = watcher;
+    this.eventEmitter = eventEmitter;
     this.port = port;
     this.sseManager = new SSEManager();
     this.app = express();
@@ -53,7 +53,7 @@ export class WorkLensServer {
   }
 
   private setupWatcherEvents(): void {
-    this.watcher.on('event', (event) => {
+    this.eventEmitter.on('event', (event) => {
       this.sseManager.broadcast(event);
     });
   }
