@@ -1,0 +1,33 @@
+{
+  "name": "worklens",
+  "version": "0.1.0",
+  "description": "Developer-first file/folder watcher with real-time dashboard",
+  "main": "dist/index.js",
+  "bin": {
+    "worklens": "./bin/worklens.js"
+  },
+  "scripts": {
+    "build": "tsc && cd dashboard && npm run build",
+    "build:cli": "tsc",
+    "build:dashboard": "cd dashboard && npm run build",
+    "dev": "tsc --watch"
+  },
+  "keywords": ["file-watcher", "developer-tools", "dashboard"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "chalk": "^4.1.2",
+    "chokidar": "^4.0.1",
+    "commander": "^12.0.0",
+    "express": "^4.18.2",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.9",
+    "@types/express": "^4.17.21",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}
