@@ -54,10 +54,15 @@ export class FileScanner extends EventEmitter {
   }
 
   private shouldIgnore(rel: string): boolean {
+    // Always skip any node_modules anywhere in the tree
+    const segments = rel.split(path.sep);
+    if (segments.includes('node_modules')) return true;
+    if (segments.includes('.git')) return true;
+
     for (const pattern of this.config.watch.exclude) {
       if (pattern.endsWith('/**')) {
         const dir = pattern.slice(0, -3);
-        if (rel === dir || rel.startsWith(dir + '/')) return true;
+        if (rel === dir || rel.startsWith(dir + '/') || rel.startsWith(dir + path.sep)) return true;
       } else if (pattern.startsWith('*.')) {
         const ext = pattern.slice(1);
         if (rel.endsWith(ext)) return true;
@@ -69,13 +74,23 @@ export class FileScanner extends EventEmitter {
   }
 
   private walkDirectory(dir: string, files: string[] = []): string[] {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return files;
+    }
 
     for (const entry of entries) {
       const absPath = path.join(dir, entry.name);
       const relPath = path.relative(this.projectRoot, absPath);
 
+      // Check ignore for both files and directories
       if (this.shouldIgnore(relPath)) {
+        continue;
+      }
+      // Also check directory/** pattern match
+      if (entry.isDirectory() && this.shouldIgnore(relPath + '/')) {
         continue;
       }
 

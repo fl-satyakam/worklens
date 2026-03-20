@@ -60,7 +60,7 @@ export class WorkLensServer {
 
   start(): Promise<void> {
     return new Promise((resolve) => {
-      this.server = this.app.listen(this.port, () => {
+      this.server = this.app.listen(this.port, '0.0.0.0', () => {
         resolve();
       });
     });
