@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { FileEvent, Stats, TimelineData, HeatmapData, ScanCycle, FileSnapshot } from '../types';
+import { FileEvent, Stats, TimelineData, HeatmapData, ScanCycle, FileSnapshot, Session, CodebaseNode, DailyActivity, ExtensionActivity, CoChange } from '../types';
 
 export class WorkLensDB {
   private db: Database.Database;
@@ -262,6 +262,223 @@ export class WorkLensDB {
     `);
 
     stmt.run(filePath, workspace);
+  }
+
+  // --- v0.2 methods ---
+
+  private getSessionBoundaries(workspace?: string): { events: { timestamp: string; file_path: string; file_ext: string; event_type: string }[] }[] {
+    let query = 'SELECT timestamp, file_path, file_ext, event_type FROM events';
+    const params: any[] = [];
+
+    if (workspace) {
+      query += ' WHERE workspace = ?';
+      params.push(workspace);
+    }
+
+    query += ' ORDER BY timestamp ASC';
+    const events = this.db.prepare(query).all(...params) as { timestamp: string; file_path: string; file_ext: string; event_type: string }[];
+
+    const GAP_MS = 15 * 60 * 1000;
+    const sessions: { events: typeof events }[] = [];
+    let current: typeof events = [];
+
+    for (const evt of events) {
+      if (current.length > 0) {
+        const prevTime = new Date(current[current.length - 1].timestamp).getTime();
+        const curTime = new Date(evt.timestamp).getTime();
+        if (curTime - prevTime > GAP_MS) {
+          sessions.push({ events: current });
+          current = [];
+        }
+      }
+      current.push(evt);
+    }
+    if (current.length > 0) {
+      sessions.push({ events: current });
+    }
+
+    return sessions;
+  }
+
+  getSessions(workspace?: string): Session[] {
+    const sessionGroups = this.getSessionBoundaries(workspace);
+
+    return sessionGroups.map((group, idx) => {
+      const evts = group.events;
+      const startTime = evts[0].timestamp;
+      const endTime = evts[evts.length - 1].timestamp;
+      const durationMs = new Date(endTime).getTime() - new Date(startTime).getTime();
+
+      const uniqueFiles = new Set(evts.map(e => e.file_path));
+      const fileTypes: Record<string, number> = {};
+      let creates = 0;
+      let modifies = 0;
+      let deletes = 0;
+
+      for (const e of evts) {
+        const ext = e.file_ext || '(none)';
+        fileTypes[ext] = (fileTypes[ext] || 0) + 1;
+        if (e.event_type === 'create') creates++;
+        else if (e.event_type === 'modify') modifies++;
+        else if (e.event_type === 'delete') deletes++;
+      }
+
+      return {
+        id: idx + 1,
+        startTime,
+        endTime,
+        durationMs,
+        eventCount: evts.length,
+        filesChanged: uniqueFiles.size,
+        fileTypes,
+        creates,
+        modifies,
+        deletes,
+      };
+    });
+  }
+
+  getCodebaseTree(workspace?: string): CodebaseNode {
+    let query = 'SELECT file_path, COUNT(*) as count, MAX(timestamp) as lastModified FROM events';
+    const params: any[] = [];
+
+    if (workspace) {
+      query += ' WHERE workspace = ?';
+      params.push(workspace);
+    }
+
+    query += ' GROUP BY file_path';
+
+    const rows = this.db.prepare(query).all(...params) as { file_path: string; count: number; lastModified: string }[];
+
+    const root: CodebaseNode = { name: '.', path: '.', children: [], eventCount: 0, lastModified: null };
+
+    for (const row of rows) {
+      const parts = row.file_path.split('/').filter(Boolean);
+      let node = root;
+      let currentPath = '';
+
+      for (let i = 0; i < parts.length; i++) {
+        currentPath = currentPath ? currentPath + '/' + parts[i] : parts[i];
+        let child = node.children.find(c => c.name === parts[i]);
+        if (!child) {
+          child = { name: parts[i], path: currentPath, children: [], eventCount: 0, lastModified: null };
+          node.children.push(child);
+        }
+        node = child;
+      }
+
+      node.eventCount += row.count;
+      if (!node.lastModified || row.lastModified > node.lastModified) {
+        node.lastModified = row.lastModified;
+      }
+    }
+
+    // Propagate event counts and lastModified up the tree
+    const propagate = (node: CodebaseNode): { eventCount: number; lastModified: string | null } => {
+      let totalCount = node.eventCount;
+      let latestMod = node.lastModified;
+
+      for (const child of node.children) {
+        const result = propagate(child);
+        totalCount += result.eventCount;
+        if (result.lastModified && (!latestMod || result.lastModified > latestMod)) {
+          latestMod = result.lastModified;
+        }
+      }
+
+      node.eventCount = totalCount;
+      node.lastModified = latestMod;
+      return { eventCount: totalCount, lastModified: latestMod };
+    };
+
+    propagate(root);
+
+    return root;
+  }
+
+  getDailyActivity(days: number, workspace?: string): DailyActivity[] {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const conditions = ['timestamp >= ?'];
+    const params: any[] = [since];
+
+    if (workspace) {
+      conditions.push('workspace = ?');
+      params.push(workspace);
+    }
+
+    const whereClause = 'WHERE ' + conditions.join(' AND ');
+
+    const rows = this.db.prepare(`
+      SELECT date(timestamp) as date, COUNT(*) as count
+      FROM events
+      ${whereClause}
+      GROUP BY date(timestamp)
+      ORDER BY date ASC
+    `).all(...params) as DailyActivity[];
+
+    return rows;
+  }
+
+  getActivityByExtension(days: number, workspace?: string): ExtensionActivity[] {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const conditions = ['timestamp >= ?'];
+    const params: any[] = [since];
+
+    if (workspace) {
+      conditions.push('workspace = ?');
+      params.push(workspace);
+    }
+
+    const whereClause = 'WHERE ' + conditions.join(' AND ');
+
+    const rows = this.db.prepare(`
+      SELECT date(timestamp) as date, file_ext, COUNT(*) as count
+      FROM events
+      ${whereClause}
+      GROUP BY date(timestamp), file_ext
+      ORDER BY date ASC, count DESC
+    `).all(...params) as { date: string; file_ext: string; count: number }[];
+
+    const map = new Map<string, Record<string, number>>();
+    for (const row of rows) {
+      if (!map.has(row.date)) {
+        map.set(row.date, {});
+      }
+      map.get(row.date)![row.file_ext || '(none)'] = row.count;
+    }
+
+    const result: ExtensionActivity[] = [];
+    for (const [date, extensions] of map) {
+      result.push({ date, extensions });
+    }
+
+    return result;
+  }
+
+  getCoChanges(workspace?: string, limit: number = 50): CoChange[] {
+    const sessionGroups = this.getSessionBoundaries(workspace);
+    const pairCounts = new Map<string, number>();
+
+    for (const group of sessionGroups) {
+      const uniqueFiles = [...new Set(group.events.map(e => e.file_path))].sort();
+
+      for (let i = 0; i < uniqueFiles.length; i++) {
+        for (let j = i + 1; j < uniqueFiles.length; j++) {
+          const key = `${uniqueFiles[i]}\0${uniqueFiles[j]}`;
+          pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+        }
+      }
+    }
+
+    const edges: CoChange[] = [];
+    for (const [key, weight] of pairCounts) {
+      const [source, target] = key.split('\0');
+      edges.push({ source, target, weight });
+    }
+
+    edges.sort((a, b) => b.weight - a.weight);
+    return edges.slice(0, limit);
   }
 
   close(): void {

@@ -29,11 +29,11 @@
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.9",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/diff": "^7.0.2",
-    "@types/express": "^4.17.21",
+    "@types/express": "^4.17.25",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^20.11.0",
-    "typescript": "^5.3.3"
+    "@types/node": "^20.19.37",
+    "typescript": "^5.9.3"
   }
 }

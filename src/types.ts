@@ -74,3 +74,40 @@ export interface HeatmapData {
   path: string;
   count: number;
 }
+
+export interface Session {
+  id: number;
+  startTime: string;
+  endTime: string;
+  durationMs: number;
+  eventCount: number;
+  filesChanged: number;
+  fileTypes: Record<string, number>;
+  creates: number;
+  modifies: number;
+  deletes: number;
+}
+
+export interface CodebaseNode {
+  name: string;
+  path: string;
+  children: CodebaseNode[];
+  eventCount: number;
+  lastModified: string | null;
+}
+
+export interface DailyActivity {
+  date: string;
+  count: number;
+}
+
+export interface ExtensionActivity {
+  date: string;
+  extensions: Record<string, number>;
+}
+
+export interface CoChange {
+  source: string;
+  target: string;
+  weight: number;
+}

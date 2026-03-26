@@ -94,5 +94,45 @@ export function createAPIRouter(db: WorkLensDB, sseManager: SSEManager): Router 
     sseManager.addClient(res);
   });
 
+  // --- v0.2 routes ---
+
+  // GET /api/sessions - Auto-detected work sessions
+  router.get('/sessions', (req: Request, res: Response) => {
+    const workspace = req.query.workspace as string | undefined;
+    const sessions = db.getSessions(workspace);
+    res.json({ sessions });
+  });
+
+  // GET /api/codebase - Codebase tree from events
+  router.get('/codebase', (req: Request, res: Response) => {
+    const workspace = req.query.workspace as string | undefined;
+    const tree = db.getCodebaseTree(workspace);
+    res.json(tree);
+  });
+
+  // GET /api/activity/daily - Daily event counts
+  router.get('/activity/daily', (req: Request, res: Response) => {
+    const days = parseInt(req.query.days as string) || 90;
+    const workspace = req.query.workspace as string | undefined;
+    const activity = db.getDailyActivity(days, workspace);
+    res.json({ activity });
+  });
+
+  // GET /api/activity/by-extension - Daily activity grouped by file extension
+  router.get('/activity/by-extension', (req: Request, res: Response) => {
+    const days = parseInt(req.query.days as string) || 30;
+    const workspace = req.query.workspace as string | undefined;
+    const activity = db.getActivityByExtension(days, workspace);
+    res.json({ activity });
+  });
+
+  // GET /api/cochanges - Files that change together
+  router.get('/cochanges', (req: Request, res: Response) => {
+    const workspace = req.query.workspace as string | undefined;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const cochanges = db.getCoChanges(workspace, limit);
+    res.json({ cochanges });
+  });
+
   return router;
 }

@@ -46,6 +46,43 @@ export interface Workspace {
   enabled: boolean;
 }
 
+export interface Session {
+  id: number;
+  startTime: string;
+  endTime: string;
+  durationMs: number;
+  eventCount: number;
+  filesChanged: number;
+  fileTypes: Record<string, number>;
+  creates: number;
+  modifies: number;
+  deletes: number;
+}
+
+export interface CodebaseNode {
+  name: string;
+  path: string;
+  children: CodebaseNode[];
+  eventCount: number;
+  lastModified: string | null;
+}
+
+export interface DailyActivity {
+  date: string;
+  count: number;
+}
+
+export interface ExtensionActivity {
+  date: string;
+  extensions: Record<string, number>;
+}
+
+export interface CoChange {
+  source: string;
+  target: string;
+  weight: number;
+}
+
 const API_BASE = '/api';
 
 export const api = {
@@ -104,5 +141,38 @@ export const api = {
       method: 'DELETE',
     });
     if (!response.ok) throw new Error('Failed to remove workspace');
+  },
+
+  async getSessions(workspace?: string): Promise<Session[]> {
+    const params = workspace ? `?workspace=${workspace}` : '';
+    const response = await fetch(`${API_BASE}/sessions${params}`);
+    return response.json();
+  },
+
+  async getCodebase(workspace?: string): Promise<CodebaseNode> {
+    const params = workspace ? `?workspace=${workspace}` : '';
+    const response = await fetch(`${API_BASE}/codebase${params}`);
+    return response.json();
+  },
+
+  async getDailyActivity(days = 90, workspace?: string): Promise<DailyActivity[]> {
+    const params = new URLSearchParams({ days: days.toString() });
+    if (workspace) params.append('workspace', workspace);
+    const response = await fetch(`${API_BASE}/activity/daily?${params}`);
+    return response.json();
+  },
+
+  async getActivityByExtension(days = 30, workspace?: string): Promise<ExtensionActivity[]> {
+    const params = new URLSearchParams({ days: days.toString() });
+    if (workspace) params.append('workspace', workspace);
+    const response = await fetch(`${API_BASE}/activity/by-extension?${params}`);
+    return response.json();
+  },
+
+  async getCoChanges(workspace?: string, limit = 50): Promise<CoChange[]> {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    if (workspace) params.append('workspace', workspace);
+    const response = await fetch(`${API_BASE}/cochanges?${params}`);
+    return response.json();
   },
 };
